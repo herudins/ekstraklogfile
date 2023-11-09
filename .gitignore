@@ -1,0 +1,7 @@
+ekstraklog
+ekstraklog.exe
+*.log
+/bin/*.log
+/bin/ekstraklog
+/bin/ekstraklog.exe
+/sample
