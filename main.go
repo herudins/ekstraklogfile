@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -225,11 +224,12 @@ func main() {
 		}
 	}
 
-	totalLine, err := countLines(filePath)
+	totalLine, err := countUnreadData(reader)
 	if err != nil {
 		logger.Info("Error ambil informasi jumlah baris:" + err.Error())
 		totalLine = -1
 	}
+	totalLine = totalLine + noRead
 
 	msgLog := fmt.Sprintf("Sukses ekstrak file log ke file baru dengan nama: %s. Jumlah hasil ekstrak adalah %d baris dari baris yang dibaca sebanyak: %d dari total %d baris.", newFileName, noWrite, noRead, totalLine)
 	logger.Info(msgLog)
@@ -301,28 +301,19 @@ func cekFormatPrefix(prefix string) (time.Time, string, error) {
 	return dt, "", errors.New("invalid datetime prefix format")
 }
 
-func countLines(path string) (int, error) {
-	readFile, err := os.Open(path)
-	if err != nil {
-		return -1, err
-	}
-	defer func() {
-		_ = readFile.Close()
-	}()
-
-	var count int
-	var read int
-	var target []byte = []byte("\n")
-
-	buffer := make([]byte, 32*1024)
-	r := bufio.NewReader(readFile)
+func countUnreadData(r *bufio.Reader) (int, error) {
+	var err error
+	count := 0
 	for {
-		read, err = r.Read(buffer)
+		_, _, err := r.ReadLine()
 		if err != nil {
+			if err != io.EOF {
+				count = -1
+			}
+
 			break
 		}
-
-		count += bytes.Count(buffer[:read], target)
+		count++
 	}
 
 	if err == io.EOF {
