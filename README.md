@@ -4,11 +4,6 @@
 Aplikasi Command Line Interface (CLI) yang berfungsi untuk melakukan ekstraksi data log dari file sumber ke file baru sesuai dengan parameter tanggal yang ingin di ekstraksi.
 
 
-## Authors
-
-- [@herudins](https://www.github.com/herudins)
-
-
 ## Deployment
 
 Build aplikasi makefile linux dan windows:
@@ -29,10 +24,6 @@ Build aplikasi menggunakan compiler go:
 ```bash
   go build -o bin/nama_aplikasi
 ```
-
-## License
-
-[MIT](https://choosealicense.com/licenses/mit/)
 
 
 ## Run Locally
@@ -67,7 +58,9 @@ Start the server
 ./nama_aplikasi -filename="path/filename.log" -start="2023-01-01 00:00" -end="2023-01-01 23:59"
 ```
 
+## License
 
+[MIT](https://choosealicense.com/licenses/mit/)
 
 
 ## Notes
