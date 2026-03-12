@@ -68,6 +68,6 @@ Start the server
 Contoh prefix format log yang di support:
 ```text
 2023-01-01 01:01:01 INFO message log info
-[2023-01-01 01:01:01 INFO message log info]
+[2023-01-01 01:01:01] INFO message log info
 ```
 Selain contoh tersebut belum di support.
