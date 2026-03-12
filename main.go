@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -141,7 +142,8 @@ func main() {
 	startLog := start.Format(dateTimeSecond)
 
 	//Lakukan filter log
-	if err := filterLog(reader, writer, timeRange); err != nil {
+	readCount, writeCount, err := filterLog(reader, writer, timeRange)
+	if err != nil {
 		logger.Error("error when read file: " + err.Error())
 	}
 	writer.Flush()
@@ -150,6 +152,12 @@ func main() {
 	processDuration := time.Since(start)
 	end := start.Add(processDuration)
 	endLog := end.Format(dateTimeSecond)
+
+	unreadCount := max(countUnreadData(reader), 0)
+	totalLine := readCount + unreadCount
+
+	msgLog := fmt.Sprintf("Sukses ekstrak file log ke file baru dengan nama: %s. Jumlah hasil ekstrak adalah %d baris dari baris yang dibaca sebanyak: %d dari total %d baris.", outputFileName, writeCount, readCount, totalLine)
+	logger.Info(msgLog)
 
 	logTime := fmt.Sprintf("Proses baca file berlangsung selama %.2f detik dari %s s/d %s", processDuration.Seconds(), startLog, endLog)
 	logger.Info(logTime)
@@ -172,7 +180,7 @@ func usageFlag() {
 
 	b.WriteString("\nContoh prefix format log yang di support:\n")
 	b.WriteString("    2023-01-01 01:01:01 INFO message log info\n")
-	b.WriteString("    [2023-01-01 01:01:01 INFO message log info]\n")
+	b.WriteString("    [2023-01-01 01:01:01] message log info\n")
 	b.WriteString("Selain contoh tersebut belum di support.\n")
 
 	str := b.String()
@@ -199,71 +207,89 @@ func configureLogger(writer io.Writer) *slog.Logger {
 
 // filterLog membaca log baris per baris dan menulis hanya log
 // yang berada dalam rentang waktu tertentu
-func filterLog(reader *bufio.Reader, writer *bufio.Writer, timeRange TimestampRange) error {
+func filterLog(reader *bufio.Reader, writer *bufio.Writer, timeRange TimestampRange) (int64, int64, error) {
 	var shouldWrite bool
+	var readCount int64
+	var writeCount int64
 	for {
 		line, err := reader.ReadBytes('\n')
-		if err == io.EOF {
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				return readCount, writeCount, err
+			}
+
 			if len(line) > 0 {
 				if shouldWrite {
 					writer.Write(line)
+					writeCount++
 				}
 			}
-
 			break
 		}
+		readCount++
 
-		if err != nil {
-			return err
-		}
-
-		// Jika baris memiliki prefix timestamp
-		if ts, ok := extractLogTimestamp(line); ok {
+		// Periksa barisnya apakah memiliki prefix timestamp atau tidak
+		// kalau timestamp maka bandingkan dengan range waktu dari user
+		if ts, ok := extractLogAndCheckTimestamp(line); ok {
 			if ts >= timeRange.Start && ts <= timeRange.End {
 				shouldWrite = true
 			} else {
 				shouldWrite = false
+				break
 			}
 		}
 
+		//Disini barisnya bukan timestamp, maka cek apakah masih harus menulis log atau tidak
 		if shouldWrite {
 			writer.Write(line)
+			writeCount++
 		}
 	}
 
-	return nil
+	return readCount, writeCount, nil
 }
 
-// extractLogTimestamp mencoba membaca timestamp dari prefix log
-// Format yang didukung:
-//
-// [YYYY-MM-DD HH:MM:SS]
-// YYYY-MM-DD HH:MM:SS [LEVEL]
-func extractLogTimestamp(line []byte) (int64, bool) {
+func countUnreadData(reader *bufio.Reader) int64 {
+	var count int64
+	for {
+		_, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err != io.EOF {
+				count = -1
+				break
+			}
 
+			return count
+		}
+		count++
+	}
+
+	return count
+}
+
+// extractLogAndCheckTimestamp mencoba membaca timestamp dari prefix log
+func extractLogAndCheckTimestamp(line []byte) (int64, bool) {
+	//Jika kurang dari 19 digit maka itu fix bukan prefix timestamp
 	if len(line) < 19 {
 		return 0, false
 	}
 
-	// Format: [YYYY-MM-DD hh:mm:ss]
-	if line[0] == '[' {
+	prefix := line[:19]
 
+	// Format: prefix memiliki karakter [
+	if line[0] == '[' {
 		if len(line) < 20 {
 			return 0, false
 		}
 
-		return parseTimestampBytes(line[1:20]), true
+		prefix = line[1:20]
 	}
 
-	if line[4] == '-' &&
-		line[7] == '-' &&
-		line[13] == ':' &&
-		line[16] == ':' {
-
-		return parseTimestampBytes(line[:19]), true
+	if !validateTimeFormat(prefix) {
+		return 0, false
 	}
 
-	return 0, false
+	return parseTimestampBytes(prefix), true
 }
 
 // parseTimestampBytes mengubah timestamp text menjadi numeric key
@@ -355,7 +381,7 @@ func parse4DigitNumber(b []byte, i int) int {
 
 // validateUserTime memvalidasi format dan nilai waktu user
 func validateUserTime(input string) bool {
-	if !validateUserTimeFormat(input) {
+	if !validateTimeFormat([]byte(input)) {
 		return false
 	}
 
@@ -397,43 +423,42 @@ func validateUserTime(input string) bool {
 	return false
 }
 
-// validateUserTimeFormat memvalidasi struktur format waktu
+// validateTimeFormat memvalidasi struktur format waktu
 // 10 digit => YYYY-MM-DD
 // 13 digit => YYYY-MM-DD hh
 // 16 digit => YYYY-MM-DD hh:mm
 // 19 digit => YYYY-MM-DD hh:mm:ss
-func validateUserTimeFormat(input string) bool {
-	b := []byte(input)
-	switch len(b) {
+func validateTimeFormat(input []byte) bool {
+	switch len(input) {
 	case 10:
-		return validateDate(b)
+		return validateDate(input)
 
 	case 13:
-		return validateDate(b) &&
-			b[10] == ' ' &&
-			isDigit(b[11]) &&
-			isDigit(b[12])
+		return validateDate(input) &&
+			input[10] == ' ' &&
+			isDigit(input[11]) &&
+			isDigit(input[12])
 
 	case 16:
-		return validateDate(b) &&
-			b[10] == ' ' &&
-			isDigit(b[11]) &&
-			isDigit(b[12]) &&
-			b[13] == ':' &&
-			isDigit(b[14]) &&
-			isDigit(b[15])
+		return validateDate(input) &&
+			input[10] == ' ' &&
+			isDigit(input[11]) &&
+			isDigit(input[12]) &&
+			input[13] == ':' &&
+			isDigit(input[14]) &&
+			isDigit(input[15])
 
 	case 19:
-		return validateDate(b) &&
-			b[10] == ' ' &&
-			isDigit(b[11]) &&
-			isDigit(b[12]) &&
-			b[13] == ':' &&
-			isDigit(b[14]) &&
-			isDigit(b[15]) &&
-			b[16] == ':' &&
-			isDigit(b[17]) &&
-			isDigit(b[18])
+		return validateDate(input) &&
+			input[10] == ' ' &&
+			isDigit(input[11]) &&
+			isDigit(input[12]) &&
+			input[13] == ':' &&
+			isDigit(input[14]) &&
+			isDigit(input[15]) &&
+			input[16] == ':' &&
+			isDigit(input[17]) &&
+			isDigit(input[18])
 	}
 
 	return false
