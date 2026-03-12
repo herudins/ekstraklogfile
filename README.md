@@ -1,28 +1,18 @@
 
-# Ekstrak File Log
+# Extract Log Files
 
-Aplikasi Command Line Interface (CLI) yang berfungsi untuk melakukan ekstraksi data log dari file sumber ke file baru sesuai dengan parameter tanggal yang ingin di ekstraksi.
+Command Line Interface (CLI) application that functions to extract log data from source files to new files according to the date parameters to be extracted.
 
 
 ## Deployment
 
-Build aplikasi makefile linux dan windows:
+Build for linux:
 ```bash
-  make build
+  CGO_ENABLED=0 GOOS="linux" GOARCH="amd64" go build -o appname -ldflags "-s -w"
 ```
-
-Build aplikasi makefile linux:
+Build for windows:
 ```bash
-  make build-linux
-```
-
-Build aplikasi makefile windows:
-```bash
-  make build-windows
-```
-Build aplikasi menggunakan compiler go:
-```bash
-  go build -o bin/nama_aplikasi
+  CGO_ENABLED=0 GOOS="windows" GOARCH="amd64" go build -o appname.exe -ldflags "-s -w"
 ```
 
 
@@ -55,19 +45,24 @@ Start the server
 ## Usage/Examples
 
 ```text
-./nama_aplikasi -filename="path/filename.log" -start="2023-01-01 00:00" -end="2023-01-01 23:59"
+./appname -filename="path/filename.log" -start="2023-01-01 00:00" -end="2023-01-01 23:59"
 ```
+## Supported date and time prefixes format
+**Format**
+* YYYY-MM-DD
+* YYYY-MM-DD hh
+* YYYY-MM-DD hh:mm
+* YYYY-MM-DD hh:mm:ss
+
+## Notes
+
+Examples of supported log format prefixes:
+```text
+2023-01-01 01:01:01 [INFO] message log info
+[2023-01-01 01:01:01] INFO message log info
+```
+Apart from that example, it is not yet supported.
 
 ## License
 
 [MIT](https://choosealicense.com/licenses/mit/)
-
-
-## Notes
-
-Contoh prefix format log yang di support:
-```text
-2023-01-01 01:01:01 INFO message log info
-[2023-01-01 01:01:01] INFO message log info
-```
-Selain contoh tersebut belum di support.
